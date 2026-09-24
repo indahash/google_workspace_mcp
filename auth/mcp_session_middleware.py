@@ -10,6 +10,7 @@ from typing import Callable, Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import Response
 
 from auth.oauth21_session_store import (
     SessionContext,
@@ -102,5 +103,20 @@ class MCPSessionMiddleware(BaseHTTPMiddleware):
         # failure (e.g. a client disconnect mid-stream) re-enters the entire
         # downstream ASGI stack - including auth - a second time, which can
         # double-execute a tool call before failing identically again.
-        with SessionContextManager(session_context):
-            return await call_next(request)
+        try:
+            with SessionContextManager(session_context):
+                return await call_next(request)
+        except RuntimeError as e:
+            # BaseHTTPMiddleware raises this when the downstream app returns
+            # without ever sending a response - which is exactly what happens
+            # when the client disconnects before the MCP handler replies. There
+            # is no socket left to respond to, so treat it as benign rather than
+            # letting it surface as an unhandled ASGI crash on every disconnect.
+            # See https://github.com/encode/starlette/discussions/1527.
+            if str(e) == "No response returned." and await request.is_disconnected():
+                logger.debug(
+                    "Client disconnected before a response was produced for "
+                    f"{request.method} {request.url.path}"
+                )
+                return Response(status_code=204)
+            raise
