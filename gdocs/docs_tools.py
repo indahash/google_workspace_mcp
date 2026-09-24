@@ -1860,6 +1860,7 @@ async def _require_suggest_mode_preview(service: Any, document_id: str) -> None:
     request = _build_comments_included_get_request(
         service,
         documentId=document_id,
+        includeTabsContent=True,
         fields="documentId,commentsViewMode",
     )
     try:
