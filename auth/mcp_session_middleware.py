@@ -92,13 +92,15 @@ class MCPSessionMiddleware(BaseHTTPMiddleware):
                     f"MCP request with session: session_id={session_context.session_id}, "
                     f"user_id={session_context.user_id}, path={request.url.path}"
                 )
-
-            # Process request with session context
-            with SessionContextManager(session_context):
-                response = await call_next(request)
-                return response
-
         except Exception as e:
-            logger.error(f"Error in MCP session middleware: {e}")
-            # Continue without session context
+            logger.error(f"Error extracting MCP session context: {e}")
+            # Continue without session context rather than failing the request
+            session_context = None
+
+        # call_next must run exactly once: BaseHTTPMiddleware consumes the
+        # request stream on the first call, so retrying it here after a
+        # failure (e.g. a client disconnect mid-stream) re-enters the entire
+        # downstream ASGI stack - including auth - a second time, which can
+        # double-execute a tool call before failing identically again.
+        with SessionContextManager(session_context):
             return await call_next(request)
