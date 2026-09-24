@@ -1861,6 +1861,7 @@ async def _require_suggest_mode_preview(service: Any, document_id: str) -> None:
         service,
         documentId=document_id,
         includeTabsContent=True,
+        suggestionsViewMode="SUGGESTIONS_INLINE",
         fields="documentId,commentsViewMode",
     )
     try:
